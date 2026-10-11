@@ -10,11 +10,26 @@ const here = dirname(fileURLToPath(import.meta.url));
 const src = join(here, 'src');
 const dist = join(here, 'dist');
 
-const [html, css, js] = await Promise.all([
+// Script files in dependency order. The fight modules are real ES modules (so
+// node:test can import them); here we strip their import/export lines and
+// concatenate everything into one closure, which keeps them off `window`.
+const SCRIPTS = ['fight/constants.js', 'fight/logic.js', 'fight/ui.js', 'app.js'];
+
+function stripModuleSyntax(code, file) {
+  const out = code
+    .replace(/^import\s[\s\S]*?from\s+['"][^'"]+['"];?\s*$/gm, '')
+    .replace(/^export\s+(?=(const|let|function|class)\b)/gm, '');
+  if (/^\s*(import|export)\b/m.test(out)) throw new Error(`Unsupported module syntax left in ${file}`);
+  return `// ---- ${file} ----\n${out.trim()}\n`;
+}
+
+const [html, css, ...scripts] = await Promise.all([
   readFile(join(src, 'index.html'), 'utf8'),
   readFile(join(src, 'styles.css'), 'utf8'),
-  readFile(join(src, 'app.js'), 'utf8'),
+  ...SCRIPTS.map((f) => readFile(join(src, f), 'utf8')),
 ]);
+
+const js = `(() => {\n'use strict';\n${scripts.map((code, i) => stripModuleSyntax(code, SCRIPTS[i])).join('\n')}})();\n`;
 
 const sha = (s) => `'sha256-${createHash('sha256').update(s, 'utf8').digest('base64')}'`;
 

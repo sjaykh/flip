@@ -3,6 +3,7 @@
 
   // Everything lives here, in memory. Nothing is persisted or sent anywhere.
   const state = {
+    mode: 'write', // 'write' (scratchpad) | 'fight'
     step: 0,
     spiral: '',
     good: '',
@@ -118,6 +119,7 @@
 
   function updateChrome() {
     const s = state.step;
+    if (state.mode === 'fight') return;
     backBtn.hidden = s === 0;
     progress.hidden = s === 0;
     if (s >= 1) {
@@ -130,27 +132,36 @@
     }
   }
 
+  // Shows one screen (scratchpad step number or fight screen id) and hides the rest.
+  function showScreen(id, chrome) {
+    steps.forEach((sec) => {
+      const on = sec.dataset.step === String(id);
+      sec.hidden = !on;
+      sec.classList.toggle('entering', on);
+    });
+    if (chrome) {
+      backBtn.hidden = !chrome.back;
+      progress.hidden = true;
+    }
+    window.scrollTo(0, 0);
+    const heading = $(`#h-${id}`);
+    if (heading) heading.focus({ preventScroll: true });
+  }
+
   function go(next) {
     const prev = state.step;
-    if (next === prev) return;
+    if (next === prev && state.mode === 'write') return;
+    state.mode = 'write';
+    document.body.classList.remove('arena-mode');
     state.step = next;
 
     if (next === 2 || next === 3 || next === 5 || next === 6) fillEchoes();
     if (next === 5 && !state.afterTouched) setSlider('after', state.before);
     if (next === 6) renderSummary();
 
-    steps.forEach((sec) => {
-      const isNext = Number(sec.dataset.step) === next;
-      sec.hidden = !isNext;
-      sec.classList.toggle('entering', isNext);
-    });
-
+    showScreen(next);
     updateChrome();
     refreshGate(next);
-    window.scrollTo(0, 0);
-
-    const heading = $(`#h-${next}`);
-    if (heading) heading.focus({ preventScroll: true });
   }
 
   function tryNext() {
@@ -275,20 +286,25 @@
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
   }
 
-  function download(kind) {
-    const isMd = kind === 'md';
-    const body = isMd ? buildMarkdown() : buildText();
-    const blob = new Blob([body], { type: (isMd ? 'text/markdown' : 'text/plain') + ';charset=utf-8' });
+  // Saves text as a file entirely in the browser (blob URL, no network).
+  function downloadFile(name, body, mime) {
+    const blob = new Blob([body], { type: `${mime};charset=utf-8` });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `flip-${fileStamp(state.finishedAt || new Date())}.${kind}`;
+    a.download = name;
     document.body.appendChild(a);
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function download(kind) {
+    const isMd = kind === 'md';
+    const name = `flip-${fileStamp(state.finishedAt || new Date())}.${kind}`;
+    downloadFile(name, isMd ? buildMarkdown() : buildText(), isMd ? 'text/markdown' : 'text/plain');
     state.dirty = false;
-    $('#hint-6').textContent = `Downloaded ${a.download}. It's only on your device.`;
+    $('#hint-6').textContent = `Downloaded ${name}. It's only on your device.`;
   }
 
   // ---------- Reset ----------
@@ -307,6 +323,7 @@
     $('#hint-6').textContent = '';
     $('details.echo').open = false;
     [1, 2, 3, 4].forEach(refreshGate);
+    fight.reset();
     go(0);
   }
 
@@ -388,13 +405,30 @@
   });
 
   backBtn.addEventListener('click', () => {
-    if (state.step > 0) go(state.step - 1);
+    if (state.mode === 'fight') fight.back();
+    else if (state.step > 0) go(state.step - 1);
   });
 
   window.addEventListener('beforeunload', (e) => {
-    if (!state.dirty) return;
+    if (!state.dirty && !fight.isDirty()) return;
     e.preventDefault();
     e.returnValue = '';
+  });
+
+  // ---------- Fight mode ----------
+  const fight = initFight({
+    showScreen,
+    setMode(mode) {
+      state.mode = mode;
+      state.step = null;
+    },
+    home: () => go(0),
+    askReset,
+    downloadFile,
+    formatDate,
+    fileStamp,
+    textBar,
+    refreshDirty() {},
   });
 
   // ---------- Init ----------
