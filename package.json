@@ -1,0 +1,15 @@
+{
+  "name": "flip",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A private, static CBT scratchpad for overthinking and catastrophising.",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "serve": "node scripts/serve.mjs",
+    "check": "npm run build && node scripts/check.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

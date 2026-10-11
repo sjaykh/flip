@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="__CSP__">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f6f1ea" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1b1917" media="(prefers-color-scheme: dark)">
+<meta name="description" content="A private CBT scratchpad for overthinking. Write the worst case, flip it, find what's most likely. Nothing leaves your browser.">
+<title>Flip — a scratchpad for spiralling thoughts</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%235f8a78'/%3E%3Cpath d='M10 13h10l-3-3M22 19H12l3 3' stroke='white' stroke-width='2.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>__STYLE__</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="topbar">
+  <button id="back" class="ghost-btn" type="button" hidden>
+    <span aria-hidden="true">←</span> Back
+  </button>
+  <div id="progress" class="progress" hidden>
+    <p id="progress-text" class="progress-text">Step 1 of 5</p>
+    <ol class="dots" aria-hidden="true">
+      <li></li><li></li><li></li><li></li><li></li>
+    </ol>
+  </div>
+  <button id="theme" class="ghost-btn theme-btn" type="button" aria-label="Switch to dark theme">
+    <svg class="icon icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg>
+    <svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+  </button>
+</header>
+
+<main id="main">
+
+  <!-- 0 · Landing -->
+  <section class="step" data-step="0" aria-labelledby="h-0">
+    <p class="eyebrow">Flip</p>
+    <h1 id="h-0" tabindex="-1">When your mind runs to the worst case, flip it.</h1>
+    <p class="lede">Write the spiral down. Write the absurdly good version. Then, with both in front of you, find what will <em>probably</em> happen — and one small thing you can do.</p>
+    <p class="privacy">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+      <span>Nothing you write here is saved or sent anywhere. Download it if you want to keep it.</span>
+    </p>
+    <p class="meta">Takes about five minutes. Five short steps.</p>
+    <div class="actions">
+      <button class="primary-btn" type="button" data-action="start">Start</button>
+    </div>
+  </section>
+
+  <!-- 1 · Spiral -->
+  <section class="step" data-step="1" aria-labelledby="h-1" hidden>
+    <h1 id="h-1" tabindex="-1">What's the spiral?</h1>
+    <p class="prompt" id="p-spiral">Write the worst-case thought exactly as your mind is telling it. Don't tidy it up.</p>
+    <label class="visually-hidden" for="spiral">Your worst-case thought</label>
+    <textarea id="spiral" class="field tone-spiral" rows="6" aria-describedby="p-spiral hint-1" autocomplete="off" spellcheck="true"></textarea>
+    <p class="hint" id="hint-1" aria-live="polite"></p>
+
+    <div class="slider-block">
+      <label class="slider-label" for="before">How much do you believe this right now?</label>
+      <div class="slider-row">
+        <input type="range" id="before" min="0" max="100" step="1" value="50">
+        <output id="before-out" for="before" class="slider-out">50</output>
+      </div>
+      <div class="slider-ends" aria-hidden="true"><span>Not at all</span><span>Completely</span></div>
+    </div>
+
+    <div class="actions">
+      <button class="primary-btn" type="button" data-action="next" data-gate="1">Next</button>
+    </div>
+  </section>
+
+  <!-- 2 · Uno reverse -->
+  <section class="step" data-step="2" aria-labelledby="h-2" hidden>
+    <h1 id="h-2" tabindex="-1">Uno reverse</h1>
+    <details class="echo tone-spiral">
+      <summary>Your spiral</summary>
+      <p class="echo-text" data-echo="spiral"></p>
+    </details>
+    <p class="prompt" id="p-good">Now write the absurdly good version. Same detail, same energy. You don't have to believe it.</p>
+    <label class="visually-hidden" for="good">The absurdly good version</label>
+    <textarea id="good" class="field tone-good" rows="6" aria-describedby="p-good hint-2" autocomplete="off" spellcheck="true"></textarea>
+    <div class="meter" aria-hidden="true"><span id="meter-fill"></span></div>
+    <p class="hint" id="hint-2" aria-live="polite"></p>
+    <div class="actions">
+      <button class="primary-btn" type="button" data-action="next" data-gate="2">Next</button>
+    </div>
+  </section>
+
+  <!-- 3 · Most likely -->
+  <section class="step" data-step="3" aria-labelledby="h-3" hidden>
+    <h1 id="h-3" tabindex="-1">Most likely</h1>
+    <div class="pair">
+      <div class="echo-card tone-spiral">
+        <h2 class="echo-title">The spiral</h2>
+        <p class="echo-text" data-echo="spiral"></p>
+      </div>
+      <div class="echo-card tone-good">
+        <h2 class="echo-title">The absurdly good version</h2>
+        <p class="echo-text" data-echo="good"></p>
+      </div>
+    </div>
+    <p class="prompt" id="p-likely">With both extremes in front of you, what will probably actually happen?</p>
+    <label class="visually-hidden" for="likely">What will probably actually happen</label>
+    <textarea id="likely" class="field tone-likely" rows="5" aria-describedby="p-likely hint-3" autocomplete="off" spellcheck="true"></textarea>
+    <p class="hint" id="hint-3" aria-live="polite"></p>
+    <div class="actions">
+      <button class="primary-btn" type="button" data-action="next" data-gate="3">Next</button>
+    </div>
+  </section>
+
+  <!-- 4 · One move -->
+  <section class="step" data-step="4" aria-labelledby="h-4" hidden>
+    <h1 id="h-4" tabindex="-1">One move</h1>
+    <p class="prompt" id="p-move">Is there one thing you can do about it? If not, write “nothing, let it go”.</p>
+    <label class="visually-hidden" for="move">One thing you can do</label>
+    <textarea id="move" class="field tone-move" rows="3" aria-describedby="p-move hint-4" autocomplete="off" spellcheck="true"></textarea>
+    <button class="chip" type="button" data-action="let-go">Nothing, let it go</button>
+    <p class="hint" id="hint-4" aria-live="polite"></p>
+    <div class="actions">
+      <button class="primary-btn" type="button" data-action="next" data-gate="4">Next</button>
+    </div>
+  </section>
+
+  <!-- 5 · Re-rate -->
+  <section class="step" data-step="5" aria-labelledby="h-5" hidden>
+    <h1 id="h-5" tabindex="-1">Re-rate</h1>
+    <figure class="quote tone-spiral">
+      <figcaption>Your original spiral</figcaption>
+      <blockquote class="echo-text" data-echo="spiral"></blockquote>
+    </figure>
+    <div class="slider-block">
+      <label class="slider-label" for="after">How much do you believe this now?</label>
+      <div class="slider-row">
+        <input type="range" id="after" min="0" max="100" step="1" value="50">
+        <output id="after-out" for="after" class="slider-out">50</output>
+      </div>
+      <div class="slider-ends" aria-hidden="true"><span>Not at all</span><span>Completely</span></div>
+    </div>
+    <div class="actions">
+      <button class="primary-btn" type="button" data-action="next" data-gate="5">See summary</button>
+    </div>
+  </section>
+
+  <!-- 6 · Summary -->
+  <section class="step" data-step="6" aria-labelledby="h-6" hidden>
+    <h1 id="h-6" class="visually-hidden" tabindex="-1">Your flip</h1>
+    <article id="card" class="card">
+      <header class="card-head">
+        <p class="card-title">Flip</p>
+        <p class="card-date" id="card-date"></p>
+      </header>
+      <section class="card-sec tone-spiral">
+        <h2>The spiral</h2>
+        <p class="echo-text" data-echo="spiral"></p>
+      </section>
+      <section class="card-sec tone-good">
+        <h2>The absurdly good version</h2>
+        <p class="echo-text" data-echo="good"></p>
+      </section>
+      <section class="card-sec tone-likely">
+        <h2>Most likely</h2>
+        <p class="echo-text" data-echo="likely"></p>
+      </section>
+      <section class="card-sec tone-move">
+        <h2>One move</h2>
+        <p class="echo-text" data-echo="move"></p>
+      </section>
+      <section class="card-sec belief">
+        <h2>Belief: <span id="belief-line"></span></h2>
+        <div class="bars">
+          <div class="bar-row">
+            <span class="bar-label">Before</span>
+            <span class="bar"><span class="bar-fill bar-before" id="bar-before"></span></span>
+            <span class="bar-num" id="num-before"></span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">After</span>
+            <span class="bar"><span class="bar-fill bar-after" id="bar-after"></span></span>
+            <span class="bar-num" id="num-after"></span>
+          </div>
+        </div>
+        <p class="belief-note" id="belief-note"></p>
+      </section>
+    </article>
+
+    <div class="summary-actions">
+      <button class="primary-btn" type="button" data-action="dl-md">Download .md</button>
+      <button class="secondary-btn" type="button" data-action="dl-txt">Download .txt</button>
+      <button class="secondary-btn" type="button" data-action="print">Print / save as PDF</button>
+      <button class="ghost-btn wide" type="button" data-action="reset">Start over</button>
+    </div>
+    <p class="hint" id="hint-6" aria-live="polite"></p>
+  </section>
+</main>
+
+<footer class="safety">
+  <p>This is a self-help exercise, not therapy. If you're in crisis: India — Tele-MANAS <a href="tel:14416">14416</a> · Elsewhere — <a href="https://findahelpline.com" target="_blank" rel="noopener noreferrer">findahelpline.com</a></p>
+</footer>
+
+<dialog id="confirm" aria-labelledby="confirm-title" aria-describedby="confirm-body">
+  <h2 id="confirm-title">Start over?</h2>
+  <p id="confirm-body">This clears everything you've written. If you want to keep it, download it first.</p>
+  <div class="dialog-actions">
+    <button class="secondary-btn" type="button" data-action="cancel-reset" autofocus>Keep it</button>
+    <button class="primary-btn" type="button" data-action="confirm-reset">Clear and start over</button>
+  </div>
+</dialog>
+
+<script>__SCRIPT__</script>
+</body>
+</html>
