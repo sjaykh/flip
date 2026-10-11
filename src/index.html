@@ -205,36 +205,50 @@
 
   <!-- F1 · The thought -->
   <section class="step" data-step="f1" aria-labelledby="h-f1" hidden>
-    <p class="eyebrow fight-eyebrow">Fight it · Setup 1 of 2</p>
+    <p class="eyebrow fight-eyebrow">Fight it · Setup 1 of 4</p>
     <h1 id="h-f1" tabindex="-1">What's the thought?</h1>
-    <p class="prompt" id="p-f-thought">Write it exactly as it sounds in your head. It becomes your opponent.</p>
+    <p class="prompt" id="p-f-thought">Write it exactly as it sounds in your head. It becomes your opponent, and one of its attacks.</p>
     <label class="visually-hidden" for="f-thought">The anxious thought</label>
-    <textarea id="f-thought" class="field tone-spiral" rows="5" aria-describedby="p-f-thought hint-f1" autocomplete="off" spellcheck="true"></textarea>
+    <textarea id="f-thought" class="field tone-spiral" rows="5" maxlength="280" aria-describedby="p-f-thought hint-f1" autocomplete="off" spellcheck="true"></textarea>
     <p class="hint" id="hint-f1" aria-live="polite"></p>
     <div class="actions">
-      <button class="primary-btn" type="button" data-action="f-next" data-fgate="f1">Next</button>
+      <button class="primary-btn" type="button" data-action="f-next1" data-fgate="f1">Next</button>
     </div>
   </section>
 
-  <!-- F2 · Strength -->
+  <!-- F2 · Context (optional) -->
   <section class="step" data-step="f2" aria-labelledby="h-f2" hidden>
-    <p class="eyebrow fight-eyebrow">Fight it · Setup 2 of 2</p>
-    <h1 id="h-f2" tabindex="-1">How strong is it right now?</h1>
+    <p class="eyebrow fight-eyebrow">Fight it · Setup 2 of 4 · optional</p>
+    <h1 id="h-f2" tabindex="-1">A little context</h1>
+    <p class="prompt">Anxiety uses these to get specific, so you can practise answering the real thing. Skip any of them.</p>
+    <div class="ctx-fields">
+      <label class="ctx-field">
+        <span class="ctx-label">What's the situation?</span>
+        <input type="text" id="f-situation" maxlength="60" autocomplete="off" placeholder="e.g. the product review on Friday">
+      </label>
+      <label class="ctx-field">
+        <span class="ctx-label">Who's involved?</span>
+        <input type="text" id="f-who" maxlength="60" autocomplete="off" placeholder="e.g. my manager">
+      </label>
+      <label class="ctx-field">
+        <span class="ctx-label">What are you afraid it says about you?</span>
+        <input type="text" id="f-fear" maxlength="60" autocomplete="off" placeholder="e.g. I'm not good enough">
+      </label>
+    </div>
+    <p class="hint" id="hint-f2" aria-live="polite"></p>
+    <div class="actions split">
+      <button class="ghost-btn" type="button" data-action="f-skip-ctx">Skip</button>
+      <button class="primary-btn" type="button" data-action="f-next2">Next</button>
+    </div>
+  </section>
+
+  <!-- F3 · Strength -->
+  <section class="step" data-step="f3" aria-labelledby="h-f3" hidden>
+    <p class="eyebrow fight-eyebrow">Fight it · Setup 3 of 4</p>
+    <h1 id="h-f3" tabindex="-1">How strong is it right now?</h1>
     <div class="preview-stage" aria-hidden="true">
-      <div class="nameplate preview-plate"><span class="np-name">ANXIETY</span><span class="np-hp" id="f-preview-hp">50</span></div>
-      <div class="blob-wrap" id="f-preview-blob"><svg class="blob" viewBox="0 0 200 200">
-            <ellipse class="shadow" cx="100" cy="190" rx="70" ry="8"/>
-            <g class="blob-body">
-              <path class="blob-fill" d="M100 22c34 0 52 22 62 46 9 22 22 34 22 62 0 34-30 56-84 56S16 164 16 130c0-28 13-40 22-62 10-24 28-46 62-46Z"/>
-              <path class="blob-spike" d="M58 52 46 30l22 14M142 52l12-22-22 14M100 24l-4-18 12 16"/>
-              <path class="brow" d="M60 86l26 10M140 86l-26 10"/>
-              <ellipse class="eye" cx="76" cy="104" rx="11" ry="9"/>
-              <ellipse class="eye" cx="124" cy="104" rx="11" ry="9"/>
-              <circle class="pupil" cx="73" cy="106" r="4.5"/>
-              <circle class="pupil" cx="121" cy="106" r="4.5"/>
-              <path class="mouth" d="M70 140l10-8 10 8 10-8 10 8 10-8 10 8"/>
-            </g>
-          </svg></div>
+      <canvas id="f-preview" width="160" height="90"></canvas>
+      <p class="preview-plate"><span class="np-name">ANXIETY</span> <span class="np-hp" id="f-preview-hp">105</span><span class="np-max"> HP</span></p>
     </div>
     <p class="preview-quote" id="f-preview-quote"></p>
     <div class="slider-block">
@@ -246,103 +260,101 @@
       <div class="slider-ends" aria-hidden="true"><span>A whisper</span><span>Deafening</span></div>
     </div>
     <div class="actions">
+      <button class="primary-btn" type="button" data-action="f-next3">Next</button>
+    </div>
+  </section>
+
+  <!-- F4 · Settings -->
+  <section class="step" data-step="f4" aria-labelledby="h-f4" hidden>
+    <p class="eyebrow fight-eyebrow">Fight it · Setup 4 of 4</p>
+    <h1 id="h-f4" tabindex="-1">Settings</h1>
+    <p class="prompt">You can change these any time from the pause menu.</p>
+    <div class="switches" data-switches></div>
+    <div class="actions">
       <button class="primary-btn fight-btn" type="button" data-action="f-fight">Enter the ring</button>
     </div>
   </section>
 
-  <!-- F3 · Arena -->
-  <section class="step arena-screen" data-step="f3" aria-labelledby="h-f3" hidden>
-    <h1 id="h-f3" class="visually-hidden" tabindex="-1">Fight: you versus anxiety</h1>
-    <div class="arena" id="arena">
-      <div class="hud">
-        <div class="hud-main">
-          <div class="nameplate"><span class="np-name">ANXIETY</span><span class="np-hp"><span id="f-hp-num">50</span><span class="np-max">/100</span></span></div>
-          <div class="hpbar" id="f-hpbar" role="meter" aria-label="Anxiety strength" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"><span id="f-hp-fill"></span></div>
+  <!-- F5 · Arena -->
+  <section class="step arena-screen" data-step="f5" aria-labelledby="h-f5" hidden>
+    <h1 id="h-f5" class="visually-hidden" tabindex="-1">Fight: you versus anxiety</h1>
+    <p class="safety-banner" id="f-safety-banner" role="note" hidden></p>
+    <div class="arena-wrap" id="f-arena-wrap">
+      <div class="screen" id="f-screen">
+        <canvas id="f-canvas" width="256" height="144" aria-hidden="true"></canvas>
+        <p class="nameplate-quote" id="f-quote" aria-hidden="true"></p>
+        <div class="projectile" id="f-projectile" hidden aria-hidden="true">
+          <span class="proj-trap" id="f-proj-trap"></span>
+          <span class="proj-text" id="f-proj-text"></span>
         </div>
-        <div class="hud-tools">
-          <span class="timer" id="f-timer" aria-label="Fight time">0:00</span>
-          <button class="hud-btn" type="button" id="f-sound" aria-pressed="false" aria-label="Sound off">
-            <svg class="icon icon-sound-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="m17 9 5 6M22 9l-5 6"/></svg>
-            <svg class="icon icon-sound-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 8.5a5 5 0 0 1 0 7M19.5 6a8.5 8.5 0 0 1 0 12"/></svg>
-          </button>
-          <button class="hud-btn" type="button" id="f-help-btn" aria-expanded="false" aria-controls="f-help" aria-label="How damage works">?</button>
-          <button class="hud-btn" type="button" data-action="f-leave" aria-label="Leave the fight">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
-          </button>
-        </div>
-      </div>
 
-      <div class="stage" id="f-stage">
-        <p class="bubble" id="f-bubble"></p>
-        <div class="fighter" id="f-player" aria-hidden="true">
-          <svg viewBox="0 0 120 200">
-            <ellipse class="shadow" cx="60" cy="192" rx="40" ry="6"/>
-            <path class="limb" d="M48 128 L36 186 M70 128 L86 186"/>
-            <rect class="torso" x="38" y="70" width="44" height="64" rx="18"/>
-            <path class="limb arm-back" d="M44 86 L26 112 L40 120"/>
-            <path class="limb arm-front" d="M78 86 L100 92 L112 84"/>
-            <circle class="fist" cx="113" cy="83" r="8"/>
-            <circle class="head" cx="60" cy="46" r="24"/>
-            <path class="band" d="M37 40 Q60 32 83 40 L83 47 Q60 40 37 47 Z"/>
-            <path class="band-tail" d="M38 43 Q22 38 12 48 M38 45 Q24 50 16 60"/>
-            <circle class="eye-p" cx="68" cy="50" r="2.6"/>
-            <circle class="eye-p" cx="78" cy="50" r="2.6"/>
-          </svg>
-        </div>
-        <div class="blob-wrap" id="f-blob" aria-hidden="true"><svg class="blob" viewBox="0 0 200 200">
-            <ellipse class="shadow" cx="100" cy="190" rx="70" ry="8"/>
-            <g class="blob-body">
-              <path class="blob-fill" d="M100 22c34 0 52 22 62 46 9 22 22 34 22 62 0 34-30 56-84 56S16 164 16 130c0-28 13-40 22-62 10-24 28-46 62-46Z"/>
-              <path class="blob-spike" d="M58 52 46 30l22 14M142 52l12-22-22 14M100 24l-4-18 12 16"/>
-              <path class="brow" d="M60 86l26 10M140 86l-26 10"/>
-              <ellipse class="eye" cx="76" cy="104" rx="11" ry="9"/>
-              <ellipse class="eye" cx="124" cy="104" rx="11" ry="9"/>
-              <circle class="pupil" cx="73" cy="106" r="4.5"/>
-              <circle class="pupil" cx="121" cy="106" r="4.5"/>
-              <path class="mouth" d="M70 140l10-8 10 8 10-8 10 8 10-8 10 8"/>
-            </g>
-          </svg></div>
-        <div class="dmg-layer" id="f-dmg-layer" aria-hidden="true"></div>
-        <div class="banner" id="f-banner" aria-hidden="true"></div>
-
-        <div class="breathe" id="f-breathe" hidden>
+        <div class="overlay breathe" id="f-breathe" hidden>
           <p class="breathe-msg" id="f-breathe-msg" tabindex="-1"></p>
           <div class="box" aria-hidden="true"><span class="box-dot"></span></div>
-          <p class="breathe-phase"><span id="f-breathe-phase" aria-live="assertive"></span> <span class="breathe-count" id="f-breathe-count" aria-hidden="true"></span></p>
+          <p class="breathe-phase"><span id="f-breathe-phase"></span> <span class="breathe-count" id="f-breathe-count" aria-hidden="true"></span></p>
+          <button class="overlay-btn" type="button" data-action="f-skip-breath">Skip</button>
         </div>
+
+        <div class="overlay between" id="f-between" hidden>
+          <p class="between-title" id="f-between-title"></p>
+          <p class="between-text" id="f-between-text"></p>
+          <div class="box mini" id="f-between-box" aria-hidden="true"><span class="box-dot"></span></div>
+        </div>
+
       </div>
     </div>
 
+    <div class="overlay pause" id="f-pause" hidden role="dialog" aria-labelledby="f-pause-title">
+      <h2 id="f-pause-title" tabindex="-1">Paused</h2>
+      <button class="overlay-btn primary" type="button" data-action="f-resume">Resume</button>
+      <div class="switches compact" data-switches></div>
+      <details class="rules">
+        <summary>How damage works</summary>
+        <ul data-rules></ul>
+      </details>
+      <button class="overlay-btn" type="button" data-action="f-leave">Leave fight</button>
+    </div>
+
+    <p class="visually-hidden" id="f-status"></p>
+    <p class="visually-hidden" id="f-announce" aria-live="assertive"></p>
+
     <div class="controls" id="f-controls">
-      <div class="help-panel" id="f-help" hidden>
-        <h2>How damage works</h2>
-        <ul id="f-rules"></ul>
+      <div class="ctl-top">
+        <p class="f-feedback" id="f-feedback" aria-live="polite"></p>
+        <button class="ctl-btn" type="button" id="f-help-btn" aria-expanded="false" aria-controls="f-help" aria-label="How damage works">?</button>
+        <button class="ctl-btn" type="button" id="f-pause-btn" data-action="f-pause" aria-label="Pause (Esc)">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>
+        </button>
       </div>
-      <p class="f-feedback" id="f-feedback" aria-live="polite"></p>
+      <div class="help-panel" id="f-help" hidden>
+        <ul data-rules></ul>
+      </div>
 
       <div class="fight-input" id="f-input-area">
         <fieldset class="moves" id="f-moves">
           <legend class="visually-hidden">Choose a move</legend>
         </fieldset>
         <button class="finisher" type="button" id="f-finisher" hidden>FULL FLIP <span>· 25</span></button>
-        <form class="attack-row" id="f-form" novalidate>
-          <label class="visually-hidden" for="f-line" id="f-line-label">Your line</label>
-          <input id="f-line" type="text" enterkeyhint="send" autocomplete="off" autocapitalize="sentences" spellcheck="true">
-          <button class="hit-btn" type="submit">Hit</button>
+        <form class="attack-form" id="f-form" novalidate>
+          <label class="mode-label" for="f-line" id="f-line-label"></label>
+          <div class="attack-row">
+            <input id="f-line" type="text" enterkeyhint="send" autocomplete="off" autocapitalize="sentences" spellcheck="true" maxlength="200">
+            <button class="hit-btn" id="f-hit-btn" type="submit">Hit</button>
+          </div>
         </form>
       </div>
 
-      <div class="ko-panel" id="f-ko" hidden>
-        <p id="f-ko-msg" tabindex="-1"></p>
+      <div class="end-panel" id="f-end" hidden>
+        <p id="f-end-msg" tabindex="-1"></p>
         <button class="primary-btn fight-btn" type="button" data-action="f-debrief">Continue</button>
       </div>
     </div>
   </section>
 
-  <!-- F4 · Re-rate -->
-  <section class="step" data-step="f4" aria-labelledby="h-f4" hidden>
+  <!-- F6 · Re-rate -->
+  <section class="step" data-step="f6" aria-labelledby="h-f6" hidden>
     <p class="eyebrow fight-eyebrow">After the fight · 1 of 2</p>
-    <h1 id="h-f4" tabindex="-1">How strong is the thought now?</h1>
+    <h1 id="h-f6" tabindex="-1">How strong is the thought now?</h1>
     <figure class="quote tone-spiral">
       <figcaption>The thought</figcaption>
       <blockquote class="echo-text" data-fecho="thought"></blockquote>
@@ -360,22 +372,22 @@
     </div>
   </section>
 
-  <!-- F5 · Feeling -->
-  <section class="step" data-step="f5" aria-labelledby="h-f5" hidden>
+  <!-- F7 · Feeling -->
+  <section class="step" data-step="f7" aria-labelledby="h-f7" hidden>
     <p class="eyebrow fight-eyebrow">After the fight · 2 of 2</p>
-    <h1 id="h-f5" tabindex="-1">How do you feel?</h1>
-    <fieldset class="feelings" id="f-feelings" aria-describedby="hint-f5">
+    <h1 id="h-f7" tabindex="-1">How do you feel?</h1>
+    <fieldset class="feelings" id="f-feelings" aria-describedby="hint-f7">
       <legend class="visually-hidden">How do you feel?</legend>
     </fieldset>
-    <p class="hint" id="hint-f5" aria-live="polite"></p>
+    <p class="hint" id="hint-f7" aria-live="polite"></p>
     <div class="actions">
-      <button class="primary-btn" type="button" data-action="f-result" data-fgate="f5">See result</button>
+      <button class="primary-btn" type="button" data-action="f-result" data-fgate="f7">See result</button>
     </div>
   </section>
 
-  <!-- F6 · Result -->
-  <section class="step" data-step="f6" aria-labelledby="h-f6" hidden>
-    <h1 id="h-f6" class="visually-hidden" tabindex="-1">Your fight</h1>
+  <!-- F8 · Result -->
+  <section class="step" data-step="f8" aria-labelledby="h-f8" hidden>
+    <h1 id="h-f8" class="visually-hidden" tabindex="-1">Your fight</h1>
     <article id="f-card" class="card fight-card">
       <header class="card-head">
         <p class="card-title">Flip · Fight</p>
@@ -384,6 +396,7 @@
       <section class="card-sec tone-spiral">
         <h2>The thought</h2>
         <p class="echo-text" data-fecho="thought"></p>
+        <dl class="facts ctx-facts" id="f-ctx-out"></dl>
       </section>
       <section class="card-sec belief">
         <h2>Strength: <span id="f-belief-line"></span></h2>
@@ -401,12 +414,8 @@
         </div>
       </section>
       <section class="card-sec tone-good">
-        <h2>Feeling &amp; fight</h2>
-        <dl class="facts">
-          <div><dt>Feeling</dt><dd id="f-feeling-out"></dd></div>
-          <div><dt>Fight time</dt><dd id="f-time-out"></dd></div>
-          <div><dt>Breathing breaks</dt><dd id="f-breaks-out"></dd></div>
-        </dl>
+        <h2>The fight</h2>
+        <dl class="facts" id="f-facts-out"></dl>
       </section>
       <section class="card-sec tone-likely">
         <h2>Your counter-arguments</h2>
@@ -421,7 +430,7 @@
       <button class="secondary-btn" type="button" data-action="f-again">Fight again</button>
       <button class="ghost-btn wide" type="button" data-action="reset">Start over</button>
     </div>
-    <p class="hint" id="hint-f6" aria-live="polite"></p>
+    <p class="hint" id="hint-f8" aria-live="polite"></p>
   </section>
 </main>
 
