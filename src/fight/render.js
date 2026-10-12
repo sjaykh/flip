@@ -7,7 +7,7 @@ export const ARENA_W = 256;
 export const ARENA_H = 144;
 const FLOOR_Y = 128;
 export const PLAYER_X = 74;
-export const ANXIETY_X = 186;
+export const OPPONENT_X = 186;
 
 // ---------- Bitmap font (5×7, original) ----------
 
@@ -212,9 +212,9 @@ function rasterPlayer(pose) {
   return g.toCanvas(PLAYER_PAL);
 }
 
-// Anxiety: an original shadow creature with glowing eyes. Built per size bucket and
+// The opponent (the thought): an original shadow creature with glowing eyes. Built per size bucket and
 // frame: idle A/B (flicker), throw (tendril out towards the player), hit (squash, X eyes).
-function rasterAnxiety(bucket, frame, darkness) {
+function rasterOpponent(bucket, frame, darkness) {
   const rx = 7 + bucket * 0.65;
   const ry = rx * 1.12;
   const w = Math.ceil(rx * 2 + 22);
@@ -222,8 +222,8 @@ function rasterAnxiety(bucket, frame, darkness) {
   const g = new Grid(w, h);
   const cx = w / 2 + 4;
   const cy = h - ry - 2;
-  const squash = frame === 'hit' ? [1.12, 0.86] : [1, 1];
-  const phase = frame === 'idleB' ? 1.3 : frame === 'throw' ? 2.1 : 0;
+  const squash = frame === 'hit' ? [1.12, 0.86] : frame === 'windup' ? [0.9, 1.1] : [1, 1];
+  const phase = frame === 'idleB' ? 1.3 : frame === 'throw' ? 2.1 : frame === 'windup' ? 0.7 : 0;
   const BODY = 2; const CORE = 3; const RIM = 4; const EYE = 5; const GLOW = 6; const MOUTH = 7;
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
@@ -237,7 +237,11 @@ function rasterAnxiety(bucket, frame, darkness) {
       if (d < edge && dy < 0.98) g.set(x, y, d < edge * 0.55 ? CORE : d > edge - 0.12 && dx < 0 ? RIM : BODY);
     }
   }
-  if (frame === 'throw') {
+  if (frame === 'windup') {
+    // Pulls back: a tendril curls up behind it before it throws.
+    g.line([cx + rx * 0.4, cy - ry * 0.3], [cx + rx + 3, cy - ry * 0.9], BODY, 2);
+    g.dot(cx + rx + 4, cy - ry - 1, 2, RIM);
+  } else if (frame === 'throw') {
     g.line([cx - rx * 0.6, cy + 1], [cx - rx - 8, cy - 4], BODY, 2);
     g.dot(cx - rx - 9, cy - 5, 2, RIM);
   }
@@ -434,14 +438,14 @@ export function createRenderer(canvas) {
   ctx.imageSmoothingEnabled = false;
   const stage = buildStage();
   const playerFrames = {};
-  const anxietyFrames = new Map();
+  const opponentFrames = new Map();
   const whiteCache = new Map();
 
   const playerSprite = (pose) => (playerFrames[pose] ||= rasterPlayer(pose));
-  const anxietySprite = (bucket, frame, dark) => {
+  const opponentSprite = (bucket, frame, dark) => {
     const key = `${bucket}:${frame}:${dark}`;
-    if (!anxietyFrames.has(key)) anxietyFrames.set(key, rasterAnxiety(bucket, frame, dark / 4));
-    return anxietyFrames.get(key);
+    if (!opponentFrames.has(key)) opponentFrames.set(key, rasterOpponent(bucket, frame, dark / 4));
+    return opponentFrames.get(key);
   };
   const white = (src) => {
     if (whiteCache.has(src)) return whiteCache.get(src);
@@ -501,20 +505,20 @@ export function createRenderer(canvas) {
     if (scene.playerFlash) ctx.drawImage(white(sprite), x, y, 64, 80);
   }
 
-  function drawAnxiety(scene, camX) {
-    const size = Math.max(0.02, scene.anxietySize);
+  function drawOpponent(scene, camX) {
+    const size = Math.max(0.02, scene.opponentScale);
     const bucket = Math.max(0, Math.min(14, Math.round(size * 14)));
     const dark = Math.max(0, Math.min(4, Math.round(size * 4)));
-    let frame = scene.anxietyPose;
+    let frame = scene.opponentPose;
     if (frame === 'idle') frame = scene.reduced ? 'idleA' : (Math.floor(scene.t / 260) % 5 === 0 ? 'idleB' : 'idleA');
-    const spr = anxietySprite(bucket, frame, dark);
-    const sc = 2;
-    const x = Math.round(ANXIETY_X - (spr.w * sc) / 2 - camX + (frame === 'hit' ? 5 : 0));
+    const spr = opponentSprite(bucket, frame, dark);
+    const sc = size < 0.08 ? 1 : 2; // a K.O.'d thought shrinks to a tiny blob
+    const x = Math.round(OPPONENT_X - (spr.w * sc) / 2 - camX + (frame === 'hit' ? 5 : 0));
     const y = Math.round(FLOOR_Y + 2 - spr.h * sc);
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
-    ctx.fillRect(Math.round(ANXIETY_X - spr.w * 0.7 - camX), FLOOR_Y - 1, Math.round(spr.w * 1.4), 3);
+    ctx.fillRect(Math.round(OPPONENT_X - spr.w * 0.7 - camX), FLOOR_Y - 1, Math.round(spr.w * 1.4), 3);
     ctx.drawImage(spr.canvas, x, y, spr.w * sc, spr.h * sc);
-    if (scene.anxietyFlash) ctx.drawImage(white(spr.canvas), x, y, spr.w * sc, spr.h * sc);
+    if (scene.opponentFlash) ctx.drawImage(white(spr.canvas), x, y, spr.w * sc, spr.h * sc);
   }
 
   function bar(x, y, w, frac, ghost, fromRight, color) {
@@ -555,11 +559,11 @@ export function createRenderer(canvas) {
 
   function drawHud(h) {
     drawText(ctx, `STREAK ${h.streak}`, 4, 2, { color: '#ffe08a', outline: '#120c1c' });
-    drawText(ctx, `SCORE ${String(h.score).padStart(4, '0')}`, ARENA_W - 4, 2, { color: '#ffe08a', outline: '#120c1c', align: 'right' });
+    if (h.focus) drawText(ctx, h.focusLabel, ARENA_W - 4, 2, { color: '#9fe0ff', outline: '#0c1830', align: 'right' });
     portrait(3, 11, 'you');
     portrait(ARENA_W - 17, 11, 'anx');
     bar(19, 13, 96, h.playerHp / h.playerMax, h.playerGhost / h.playerMax, true, ['#ffd23f', '#d99a1e']);
-    bar(ARENA_W - 115, 13, 96, h.anxietyHp / h.anxietyMax, h.anxietyGhost / h.anxietyMax, false, ['#ffd23f', '#d99a1e']);
+    bar(ARENA_W - 115, 13, 96, h.gripHp / h.gripMax, h.gripGhost / h.gripMax, false, ['#c9b8ff', '#8f78d6']);
     // K.O. badge between the bars
     ctx.fillStyle = '#100b1c';
     ctx.fillRect(117, 11, 22, 11);
@@ -567,7 +571,16 @@ export function createRenderer(canvas) {
     ctx.fillRect(118, 12, 20, 9);
     drawText(ctx, 'KO', 128, 13, { color: h.koLit ? '#fff3b0' : '#c98b7a', align: 'center' });
     drawText(ctx, h.playerName, 19, 23, { color: '#f4ecff', outline: '#120c1c' });
-    drawText(ctx, h.anxietyName, ARENA_W - 19, 23, { color: '#f4ecff', outline: '#120c1c', align: 'right' });
+    // Small, visual-only emotion meter under the player's bar.
+    drawText(ctx, h.meterLabel, 40, 23, { color: '#ffb3a7', outline: '#120c1c' });
+    ctx.fillStyle = '#100b1c';
+    ctx.fillRect(83, 24, 32, 5);
+    ctx.fillStyle = '#3a1d2a';
+    ctx.fillRect(84, 25, 30, 3);
+    ctx.fillStyle = '#ff8a6b';
+    ctx.fillRect(84, 25, Math.round(30 * Math.max(0, Math.min(1, h.meter / 100))), 3);
+    drawText(ctx, h.gripLabel, 145, 23, { color: '#c9b8ff', outline: '#120c1c' });
+    drawText(ctx, h.opponentName, ARENA_W - 19, 23, { color: '#f4ecff', outline: '#120c1c', align: 'right' });
     drawText(ctx, String(Math.max(0, Math.ceil(h.timer))).padStart(2, '0'), 128, 24, {
       scale: 2, color: ['#fff3b0', '#ffb347'], outline: '#120c1c', align: 'center',
     });
@@ -630,7 +643,7 @@ export function createRenderer(canvas) {
     }
     ctx.setTransform(1, 0, 0, 1, shakeX, shakeY);
     drawStage(scene.t, camX, reduced);
-    drawAnxiety(scene, camX);
+    drawOpponent(scene, camX);
     drawPlayer(scene, camX);
     drawParticles(scene.particles, scene.t, camX);
     drawFloaters(scene.floaters, scene.t, camX);
@@ -644,11 +657,11 @@ export function createRenderer(canvas) {
     camX += 0;
   }
 
-  return { draw, anxietyMouth: () => [ANXIETY_X - 30, 70] };
+  return { draw };
 }
 
-/** Small standalone preview of anxiety for the strength screen. */
-export function drawAnxietyPreview(canvas, size) {
+/** Small standalone preview of the opponent for the belief screen. */
+export function drawOpponentPreview(canvas, size) {
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = false;
   const W = canvas.width;
@@ -663,7 +676,7 @@ export function drawAnxietyPreview(canvas, size) {
   ctx.fillStyle = '#5a5168';
   ctx.fillRect(0, H - 10, W, 1);
   const bucket = Math.max(0, Math.min(14, Math.round(size * 14)));
-  const spr = rasterAnxiety(bucket, 'idleA', Math.round(size * 4) / 4);
+  const spr = rasterOpponent(bucket, 'idleA', Math.round(size * 4) / 4);
   const sc = 2;
   ctx.drawImage(spr.canvas, Math.round(W / 2 - (spr.w * sc) / 2), H - 8 - spr.h * sc, spr.w * sc, spr.h * sc);
 }
