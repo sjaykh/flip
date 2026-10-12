@@ -13,7 +13,7 @@ const dist = join(here, 'dist');
 // Script files in dependency order. The fight modules are real ES modules (so
 // node:test can import them); here we strip their import/export lines and
 // concatenate everything into one closure, which keeps them off `window`.
-const SCRIPTS = ['fight/constants.js', 'fight/logic.js', 'fight/ui.js', 'app.js'];
+const SCRIPTS = ['fight/constants.js', 'fight/logic.js', 'fight/render.js', 'fight/ui.js', 'app.js'];
 
 function stripModuleSyntax(code, file) {
   const out = code
