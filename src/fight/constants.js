@@ -1,59 +1,96 @@
 // Fight mode: every piece of copy, every phrase list and every tuning number.
-// Change balance or wording here without touching logic.js or ui.js.
+// Change balance or wording here without touching logic.js, render.js or ui.js.
+//
+// CBT framing: the opponent is the THOUGHT, not the feeling. Anxiety is a signal;
+// the fight is with the distorted thought that feeds it. The goal is a balanced,
+// believable thought, not a positive one.
 
-// ---------- Tuning ----------
+export const OPPONENT_NAME = 'THE SPIRAL';
+export const GRIP_LABEL = 'GRIP';
+export const EMOTION_METER_LABEL = 'ANXIETY';
+
+// ---------- Tuning (balance) ----------
 
 export const TUNING = {
-  // Anxiety HP is the 0–100 strength slider scaled into this range.
-  anxietyHpMin: 60,
-  anxietyHpMax: 150,
+  // Belief in the thought (0–100) maps onto the opponent's starting GRIP.
+  gripMin: 60,
+  gripMax: 150,
   playerHp: 100,
 
-  // Idle regen: +1 HP after this long with no player activity, then every this long.
+  // Idle regen: +1 GRIP for every 3 s of non-focus time with no activity.
   regenEveryMs: 3000,
   regenAmount: 1,
 
-  // Time between one comment resolving and the next being thrown.
-  throwDelayMs: [6000, 10000],
-  throwDelayCalmMs: [12000, 16000],
-  firstThrowMs: 4000,
-  // Travel time across the arena. Calm pace OR reduced motion multiplies it.
-  travelMobileMs: 8000,
-  travelDesktopMs: 6000,
-  slowTravelFactor: 1.5,
-  desktopMinWidth: 700,
-
   // Blocking.
-  parryAt: 12,        // counter damage >= this → PARRY
-  partialAt: 4,       // counter damage in [partialAt, parryAt) → partial block
-  commentHitMs: [10, 14], // damage a comment does to the player (inclusive range)
+  parryAt: 12, // counter damage >= this → PARRY
+  partialAt: 4, // counter damage in [partialAt, parryAt) → partial block
+  commentHit: [10, 14], // damage an unanswered comment does (inclusive range)
+
+  // Round 0: the thought lands its strongest evidence for a fixed hit.
+  openingHitDamage: 5,
 
   // Knockdown recovery — identical whether the player breathes, skips or has breaks off.
   recoverPlayerHp: 50,
-  recoverAnxietyLoss: 10,
-  downBannerMs: 2000,
-  // Box breathing after a knockdown (if Breathing breaks is on): 4 in / 4 hold / 4 out / 4 hold, twice.
-  breathPhaseMs: 4000,
-  breathCycles: 2,
+  recoverGripLoss: 10,
 
-  // Rounds.
+  // Finisher: regular moves can't take GRIP below 1; the balanced thought unlocks at 25%.
+  gripFloor: 1,
+  finisherAtFraction: 0.25,
+
+  // Rounds (99 s of non-focus time each). HP and GRIP carry over.
   rounds: 3,
   roundSeconds: 99,
-  betweenRoundsMs: 5000,
+
+  // Moves.
+  varietyBonus: 3, // first use of each move type in a fight
+  visibleMovesMobile: 4,
 
   // Comebacks.
   comebackChance: 0.3,
   fragmentMaxWords: 6,
   fragmentMaxChars: 48,
 
-  // Combo finisher.
-  finisherDamage: 25,
-
   // Text limits.
   thoughtMinChars: 20,
+  evidenceMinChars: 10,
+  balancedMinChars: 20,
   thoughtMaxChars: 280,
   contextMaxChars: 60,
+  otherEmotionMaxChars: 30,
   lineMaxChars: 200,
+};
+
+// ---------- Pacing (timings) — thinking time is protected ----------
+
+export const PACING = {
+  // Only one comment on screen at a time. After it resolves, wait this long
+  // (non-focus time) before the next throw, with a wind-up tell before it.
+  throwGapMs: 4000,
+  throwGapCalmMs: 8000,
+  windupMs: 1500,
+
+  // Travel time across the arena while the player is idle.
+  travelMobileMs: 12000,
+  travelDesktopMs: 9000,
+  travelCalmMobileMs: 18000, // also used with prefers-reduced-motion
+  travelCalmDesktopMs: 14000,
+  desktopMinWidth: 700,
+
+  // Focus mode (bullet time) while the player types.
+  focusSpeed: 0.1, // incoming comment moves at 10%
+  focusSpeedCalm: 0, // Calm pace: frozen
+  focusCap: 0.9, // a comment can't land while the player keeps typing
+  focusIdleExitMs: 8000, // no keystrokes for this long → focus ends
+
+  // Round 0 opening hit.
+  openingTravelMs: 1600,
+
+  // Banners and breaks.
+  bannerMs: 900,
+  downBannerMs: 2000,
+  breathPhaseMs: 4000, // 4 in / 4 hold / 4 out / 4 hold
+  breathCycles: 2,
+  betweenRoundsMs: 5000,
 };
 
 export const DAMAGE = {
@@ -72,16 +109,29 @@ export const MIX = {
   calm: { template: 0.2, generic: 0.7, original: 0.1 },
 };
 
-// ---------- Moves ----------
+// ---------- Moves: Socratic questions ----------
 
 export const MOVES = [
-  { id: 'jab', name: 'Evidence Jab', prompt: 'A fact that goes against the thought', anim: 'jab' },
-  { id: 'kick', name: 'Flip Kick', prompt: 'The absurdly good version', anim: 'kick' },
-  { id: 'check', name: 'Reality Check', prompt: 'What will most likely actually happen', anim: 'jab' },
-  { id: 'uppercut', name: 'Action Uppercut', prompt: 'One thing I can actually do', anim: 'uppercut' },
+  { id: 'jab', name: 'Evidence Jab', prompt: 'What facts go against this?', anim: 'jab' },
+  { id: 'friend', name: 'Friend Block', prompt: 'What would you tell a friend who thought this?', anim: 'block' },
+  { id: 'check', name: 'Reality Check', prompt: 'Worst case, best case, most likely?', anim: 'jab' },
+  { id: 'cope', name: 'Coping Shield', prompt: 'If the worst happened, how would you cope?', anim: 'block' },
+  { id: 'time', name: 'Time Kick', prompt: 'Will this matter in 5 weeks? 5 years?', anim: 'kick' },
+  { id: 'uppercut', name: 'Action Uppercut', prompt: "One thing you can do that's in your control?", anim: 'uppercut' },
 ];
 
-// ---------- Anxiety's comments ----------
+// ---------- Feelings ----------
+
+export const EMOTIONS = [
+  { id: 'anxious', label: 'anxious' },
+  { id: 'scared', label: 'scared' },
+  { id: 'ashamed', label: 'ashamed' },
+  { id: 'sad', label: 'sad' },
+  { id: 'angry', label: 'angry' },
+  { id: 'other', label: 'other' },
+];
+
+// ---------- The thought's comments ----------
 // Each trap: `generic` lines and `templates` using {situation}, {who}, {fear}.
 // A template is only used when every slot it mentions is filled.
 // Rule: comments go after the THOUGHT, never the person (no looks, body, worth,
@@ -274,7 +324,7 @@ export const VAGUE_PHRASES = [
 
 // Words that usually mean the line is grounded in something concrete.
 export const SPECIFIC_WORDS = [
-  'because', 'last time', 'even if', 'evidence', 'actually',
+  'because', 'last time', 'even if', 'evidence', 'actually', 'i could', "i'd",
   'for example', 'in fact', 'the data', 'already',
 ];
 
@@ -289,7 +339,7 @@ export const MONTHS_AND_DAYS = [
 // Capitalised words that aren't proper nouns even mid-sentence.
 export const NOT_PROPER_NOUNS = ['I', "I'm", "I'll", "I've", "I'd", 'OK', 'Ok'];
 
-// If any of these show up in the user's thought or context, anxiety uses generic
+// If any of these show up in the thought, context or Round 0 evidence, the opponent uses generic
 // lines only for the whole fight and a crisis banner sits above the arena.
 export const SELF_HARM_PATTERNS = [
   'kill myself', 'killing myself', 'suicide', 'suicidal', 'end my life', 'ending my life',
@@ -336,46 +386,93 @@ export const FEELINGS = [
 
 export const COPY = {
   playerName: 'YOU',
-  opponentName: 'ANXIETY',
   roundBanner: (n) => `ROUND ${n}`,
+  round0Banner: 'ROUND 0\nLET IT MAKE ITS CASE',
   fight: 'FIGHT!',
   ko: 'K.O.',
   down: 'DOWN, NOT OUT',
   parry: 'PARRY!',
+  focus: 'FOCUS',
   timeUp: 'TIME',
-  finisher: 'FULL FLIP',
-  koMessage: "Anxiety's small now. It may come back. You know the moves.",
-  timeoutMessage: (start, end) => `Anxiety went from ${start} to ${end}. That counts.`,
-  betweenRounds: (hp, line) => (line
-    ? `Anxiety HP: ${hp}. Your strongest line so far: “${line}”`
-    : `Anxiety HP: ${hp}. Take a breath. Next round's yours.`),
-  breatheMessage: 'Anxiety got loud. That happens. Breathe with the box.',
-  breathPhases: ['Breathe in', 'Hold', 'Breathe out', 'Hold'],
-  recovered: "Back up. You're at 50, anxiety lost 10.",
-  blockPrompt: (trap) => `Answer it! It's ${trap}`,
-  attackHint: 'Pick a move, type your line, hit Enter.',
-  vague: 'Too vague. Get specific.',
-  repeat: 'Already used that one.',
-  empty: 'Type a line first, then hit Enter.',
-  parried: (dmg) => `PARRY! The comment shatters. Anxiety takes ${dmg}.`,
-  partial: (dmg) => `Partial block. You take ${dmg}. Get more specific to parry.`,
-  hitTaken: (dmg) => `That one landed. You take ${dmg}.`,
-  finisherReady: 'All four moves landed. FULL FLIP unlocked!',
-  incoming: (trap, text) => `Incoming, ${trap}: ${text}`,
+  finisher: 'BALANCED THOUGHT',
+  focusOn: 'Focus mode. Time slows while you type.',
+  focusOff: 'Focus off. Normal speed.',
+
+  // Setup
   thoughtHints: {
     empty: 'Write it the way it sounds in your head. This becomes your opponent.',
-    short: 'A little more — make it the full thought.',
+    short: 'A little more. Make it the full thought.',
     ok: "That's the one. Next when you're ready.",
   },
+  feelingsHint: {
+    none: 'Pick at least one. Most thoughts come with more than one feeling.',
+    other: 'Name the other feeling in a word or two.',
+    ok: '',
+  },
+  situationFallback: (s) => `If you skip this, the fight will call it “${s}”.`,
+
+  // Round 0
+  evidenceLabel: "What's the strongest evidence this thought is true?",
+  evidenceHint: 'Be honest. Looking at what the thought has going for it is part of the method.',
+  evidenceShort: 'A few more words. What makes the thought feel true?',
+  evidenceButton: 'Let it land',
+  evidenceLanded: "Fair. That's the hard part to look at. Now answer it.",
+  evidenceSafeBubble: 'It made its case.',
+  evidenceTrap: 'Its case',
+
+  // Fight
+  attackHint: 'Pick a question, answer it, press Enter.',
+  blockPrompt: (trap) => `Answer it! It's ${trap}`,
+  vague: 'Too vague. Get specific.',
+  repeat: 'Already used that one.',
+  empty: 'Type a line first, then press Enter.',
+  hit: (move, dmg, extra) => `${move}! ${dmg} off its grip${extra}`,
+  parried: (dmg) => `PARRY! The comment shatters. Grip −${dmg}.`,
+  partial: (dmg) => `Partial block. You take ${dmg}. Get more specific to parry.`,
+  hitTaken: (dmg) => `That one landed. You take ${dmg}.`,
+  windup: 'It’s winding up…',
+  incoming: (trap, text) => `Incoming, ${trap}: ${text}`,
+  floorReached: 'Its grip won’t drop further with questions alone. Time for the balanced thought.',
+  finisherReady: 'Grip is low. BALANCED THOUGHT unlocked.',
+  finisherPrompt: "Write a thought that's fair to both sides. It can include what's hard.",
+  finisherMaterial: 'Material to work with',
+  finisherEvidence: 'What it had going for it',
+  finisherBest: 'Your strongest answer',
+  finisherShort: 'A bit more. Include both what is hard and what is also true.',
+  balancedBelief: 'How much do you believe this new thought?',
+
+  // Knockdowns and rounds
+  breatheMessage: 'It got loud. That happens. Breathe with the box.',
+  breathPhases: ['Breathe in', 'Hold', 'Breathe out', 'Hold'],
+  recovered: "Back up. You're at 50, its grip lost 10.",
+  betweenRounds: (grip, line) => (line
+    ? `Grip: ${grip}. Your strongest line so far: “${line}”`
+    : `Grip: ${grip}. Take a breath. Next round's yours.`),
+
+  // Endings
+  koMessage: "The thought lost its grip. The feeling may linger. That's normal, and it fades.",
+  timeoutMessage: (start, end) => `Grip went from ${start} to ${end}. That counts.`,
+  timeoutBalanced: 'Before you go, write a fair version of the thought.',
+
+  // Debrief
+  rerateBelief: 'How much do you believe the original thought now?',
+  rerateEmotion: (names) => `How intense is it now? (${names})`,
+  feelingOverall: 'How do you feel overall?',
+  copingIntro: 'Keep this for the next time the spiral starts.',
+  closing: "If you're fighting the same thought most days, arguing with it may stop helping. Try setting a 15-minute 'worry time' later in the day, or talk to someone you trust or a professional.",
+  evidenceSection: 'What the thought had going for it',
+
   safetyBanner: "If you're having thoughts of hurting yourself, please talk to someone now. India: Tele-MANAS 14416 · Elsewhere: findahelpline.com",
   rules: [
     'Damage is about 1 point per 4 characters, up to 15.',
-    'Bonus +5 each (max +15) for: a number or date · words like "because", "last time", "even if", "evidence", "actually" · a name or place mid-sentence.',
+    'Bonus +5 each (max +15) for: a number or date · words like "because", "last time", "even if", "evidence", "actually", "I could", "I\'d" · a name or place mid-sentence.',
+    'First time you use each question in a fight: +3.',
     'Short lines (under 25 characters) or empty reassurance like "it\'ll be ok" do 3 at most: too vague.',
     'Repeating a line you already used does 0.',
-    'Land all four move types to unlock FULL FLIP (25 damage).',
-    'When a comment is flying at you, your line becomes a block: 12+ damage parries it, 4–11 halves the hit, anything weaker lets it land (10–14).',
-    'Anxiety regains 1 HP every 3 seconds you sit idle.',
-    'If you get knocked down you come back at 50 HP and anxiety loses 10. Always. There is no game over.',
+    'When a comment is flying at you, your answer is a block: 12+ parries it, 4–11 halves the hit, anything weaker lets it land (10–14).',
+    'Questions alone can’t take GRIP below 1. At 25% the BALANCED THOUGHT unlocks; it’s the only way to a K.O.',
+    'While you type, time slows (focus mode). The round clock, regen and new comments wait for you.',
+    'Its grip regrows 1 point every 3 seconds you sit idle.',
+    'If you get knocked down you come back at 50 HP and its grip drops 10. Always. There is no game over.',
   ],
 };

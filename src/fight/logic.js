@@ -2,7 +2,7 @@
 // Randomness comes from a seedable RNG passed in, so tests are deterministic.
 // Functions that take a state object return a new one and never mutate their input.
 import {
-  TUNING, DAMAGE, MIX, MOVES, TRAPS, COMEBACK, ORIGINAL_TRAP_LABEL,
+  TUNING, PACING, DAMAGE, MIX, MOVES, TRAPS, COMEBACK, ORIGINAL_TRAP_LABEL, COPY,
   VAGUE_PHRASES, SPECIFIC_WORDS, MONTHS_AND_DAYS, NOT_PROPER_NOUNS,
   SELF_HARM_PATTERNS, STOPWORDS, DETERMINERS,
 } from './constants.js';
@@ -122,18 +122,19 @@ export function extractSituation(thought) {
 /**
  * Resolves the fight's context. Missing {situation} falls back to extraction from
  * the thought; {who} and {fear} stay empty. Self-harm language anywhere switches
- * on safe mode: no user text in taunts at all.
+ * (including the Round 0 evidence) switches on safe mode: no user text in taunts at all.
  */
-export function buildContext({ situation = '', who = '', fear = '' } = {}, thought = '') {
+export function buildContext({ situation = '', who = '', fear = '', evidence = '', otherEmotion = '' } = {}, thought = '') {
   const t = sanitizeText(thought, TUNING.thoughtMaxChars);
-  if (containsSelfHarm(t, situation, who, fear)) {
+  if (containsSelfHarm(t, situation, who, fear, evidence, otherEmotion)) {
     return { thought: '', situation: '', who: '', fear: '', situationSource: 'none', safeMode: true };
   }
   const ctx = {
     thought: t,
     situation: slotValue(situation),
     who: slotValue(who),
-    fear: slotValue(fear),
+    // "that I'm not good enough" → "I'm not good enough", so it reads in the opponent's mouth.
+    fear: slotValue(fear).replace(/^that\s+/i, ''),
     situationSource: 'given',
     safeMode: false,
   };
@@ -156,7 +157,8 @@ export function fillTemplate(template, values) {
     if (!v) { missing = true; return ''; }
     return v;
   });
-  return missing ? null : capitalise(out.replace(/\s+/g, ' ').trim());
+  if (missing) return null;
+  return capitalise(out.replace(/\s+/g, ' ').trim()).replace(/([.!?]\s+)([a-z])/g, (m, p, c) => p + c.toUpperCase());
 }
 
 /** First few words of a line, cut at a word boundary, for "yes-but" comebacks. */
@@ -378,121 +380,266 @@ export function maybeQueueComeback(gen, line, ctx, rng) {
   return frag ? { ...gen, pendingComeback: frag } : gen;
 }
 
+// ---------- Setup (thought-record order) ----------
+
+export const SETUP_STEPS = ['situation', 'feelings', 'thought', 'fear', 'who', 'belief', 'settings', 'evidence'];
+const OPTIONAL_STEPS = ['situation', 'fear', 'who'];
+
+/** Whether a setup step can be skipped. Round 0 evidence never can. */
+export function canSkip(step) {
+  return OPTIONAL_STEPS.includes(step);
+}
+
+/** Whether the player may continue from a setup step with the values given. */
+export function setupGate(step, v = {}) {
+  switch (step) {
+    case 'situation':
+    case 'fear':
+    case 'who':
+    case 'belief':
+    case 'settings':
+      return true;
+    case 'feelings': {
+      const list = v.emotions || [];
+      if (!list.length) return false;
+      return !list.includes('other') || slotValue(v.otherEmotion, TUNING.otherEmotionMaxChars).length > 0;
+    }
+    case 'thought':
+      return sanitizeText(v.thought, TUNING.thoughtMaxChars).length >= TUNING.thoughtMinChars;
+    case 'evidence':
+      return sanitizeText(v.evidence).length >= TUNING.evidenceMinChars;
+    default:
+      return false;
+  }
+}
+
+// ---------- Moves ----------
+
+/** Initial move layout: all moves on desktop, the first N on mobile with the rest queued. */
+export function initialMoves(desktop) {
+  const ids = MOVES.map((m) => m.id);
+  const n = desktop ? ids.length : TUNING.visibleMovesMobile;
+  return { visible: ids.slice(0, n), queue: ids.slice(n) };
+}
+
+/** After a move is used, rotate it out for the next queued one (mobile shows 4 of 6). */
+export function rotateMoves(layout, usedId) {
+  const i = layout.visible.indexOf(usedId);
+  if (i < 0 || !layout.queue.length) return layout;
+  const visible = layout.visible.slice();
+  visible[i] = layout.queue[0];
+  return { visible, queue: [...layout.queue.slice(1), usedId] };
+}
+
 // ---------- Timing ----------
 
-export function throwDelay(rng, calm) {
-  const [a, b] = calm ? TUNING.throwDelayCalmMs : TUNING.throwDelayMs;
-  return Math.round(rng.range(a, b));
+export function throwGap(calm) {
+  return calm ? PACING.throwGapCalmMs : PACING.throwGapMs;
 }
 
+/** Idle travel time. Reduced motion uses the Calm pace values. */
 export function travelTime({ width = 375, calm = false, reducedMotion = false } = {}) {
-  const base = width >= TUNING.desktopMinWidth ? TUNING.travelDesktopMs : TUNING.travelMobileMs;
-  return Math.round(base * (calm || reducedMotion ? TUNING.slowTravelFactor : 1));
-}
-
-/** 0 at launch, 1 when it reaches the player. */
-export function projectileProgress(launchedAt, now, travel) {
-  return Math.max(0, Math.min(1, (now - launchedAt) / travel));
+  const desktop = width >= PACING.desktopMinWidth;
+  if (calm || reducedMotion) return desktop ? PACING.travelCalmDesktopMs : PACING.travelCalmMobileMs;
+  return desktop ? PACING.travelDesktopMs : PACING.travelMobileMs;
 }
 
 // ---------- Fight state ----------
 
-export function startingAnxietyHp(strength) {
-  const s = Math.max(0, Math.min(100, Number(strength) || 0));
-  return Math.round(TUNING.anxietyHpMin + ((TUNING.anxietyHpMax - TUNING.anxietyHpMin) * s) / 100);
+export function startingGrip(belief) {
+  const b = Math.max(0, Math.min(100, Number(belief) || 0));
+  return Math.round(TUNING.gripMin + ((TUNING.gripMax - TUNING.gripMin) * b) / 100);
 }
 
-export function createFight(strength) {
-  const hp = startingAnxietyHp(strength);
+/**
+ * A fight. `clock` is the fight's own time in ms; the UI advances it with tick()
+ * (nothing advances while paused). All timers below are derived from it.
+ */
+export function createFight({ belief = 50, intensity = 50 } = {}) {
+  const grip = startingGrip(belief);
   return {
-    round: 1,
+    phase: 'round0', // round0 | fight | down | between | ended
+    round: 0,
     roundTimeLeftMs: TUNING.roundSeconds * 1000,
+    clock: 0,
     playerHp: TUNING.playerHp,
-    anxietyHp: hp,
-    anxietyMax: hp,
-    anxietyStart: hp,
+    grip,
+    gripMax: grip,
+    gripStart: grip,
+    intensity: Math.max(0, Math.min(100, Number(intensity) || 0)),
     streak: 0,
     bestStreak: 0,
-    score: 0,
     parries: 0,
     partials: 0,
     hitsTaken: 0,
     knockdowns: 0,
     breathCycles: 0,
-    used: [],
+    movesUsed: [],
+    log: [], // { kind: 'attack'|'block', move, line, damage, verdict, outcome?, trap? }
+    evidence: '',
+    balanced: '',
+    balancedBelief: null,
     finisherReady: false,
-    finisherUsed: false,
-    log: [], // { kind: 'attack'|'block'|'finisher', move, line, damage, verdict, outcome?, trap? }
-    lastActivityAt: 0,
-    lastRegenAt: 0,
     down: false,
     ended: null, // null | 'ko' | 'timeout'
+    focus: { active: false, lastKeyAt: 0 },
+    projectile: null, // { comment, progress, travel }
+    throwTimer: Infinity,
+    windupShown: false,
+    regenAccum: 0,
   };
 }
 
-function landed(f, moveId) {
-  const used = f.used.includes(moveId) ? f.used : [...f.used, moveId];
-  const unlocked = MOVES.every((m) => used.includes(m.id));
+/** Visual-only ANXIETY meter: starts at the felt intensity and drops in proportion to GRIP lost. */
+export function emotionMeter(f) {
+  return Math.round((f.intensity * f.grip) / f.gripStart);
+}
+
+/** Round 0: the thought lands its strongest evidence. Required; fixed opening hit. */
+export function applyEvidence(f, text) {
+  const evidence = sanitizeText(text);
+  if (!setupGate('evidence', { evidence })) return { fight: f, ok: false };
   return {
-    used,
-    finisherReady: f.finisherReady || (unlocked && !f.finisherUsed),
-    justUnlocked: unlocked && !f.finisherReady && !f.finisherUsed,
+    fight: { ...f, evidence, playerHp: Math.max(0, f.playerHp - TUNING.openingHitDamage), round: 1 },
+    ok: true,
   };
 }
 
-function damageAnxiety(f, dmg) {
-  const anxietyHp = Math.max(0, f.anxietyHp - dmg);
-  return { anxietyHp, score: f.score + Math.min(dmg, f.anxietyHp), ended: anxietyHp <= 0 ? 'ko' : f.ended };
+/** Starts (or restarts after a break) live fighting: the next throw comes after the gap. */
+export function startFighting(f, calm) {
+  return { ...f, phase: 'fight', throwTimer: throwGap(calm), windupShown: false, regenAccum: 0 };
+}
+
+/** Focusing the input or typing a character: enter (or extend) focus mode. */
+export function focusKey(f) {
+  if (f.phase !== 'fight') return { fight: f, entered: false };
+  const entered = !f.focus.active;
+  return { fight: { ...f, focus: { active: true, lastKeyAt: f.clock }, regenAccum: 0 }, entered };
+}
+
+/** Leaves focus mode (on submit, or the 8 s idle timeout inside tick). */
+export function exitFocus(f) {
+  return f.focus.active ? { ...f, focus: { ...f.focus, active: false } } : f;
+}
+
+/**
+ * Advances the fight by `dt` ms of fight time.
+ * → { fight, events } with events from: 'focusExit', 'regen', 'windup', 'throw', 'land', 'roundOver'.
+ * Focus mode pauses the round clock, regen and new throws, and slows an incoming
+ * comment to 10% (frozen with Calm pace), capped short of the player.
+ */
+export function tick(fIn, dt, { calm = false } = {}) {
+  if (fIn.phase !== 'fight') return { fight: fIn, events: [] };
+  const f = { ...fIn, clock: fIn.clock + dt, focus: { ...fIn.focus } };
+  const events = [];
+
+  if (f.focus.active && f.clock - f.focus.lastKeyAt >= PACING.focusIdleExitMs) {
+    f.focus.active = false;
+    events.push('focusExit');
+  }
+  const live = f.focus.active ? 0 : dt; // non-focus time
+
+  f.roundTimeLeftMs = Math.max(0, f.roundTimeLeftMs - live);
+
+  if (!f.focus.active) {
+    f.regenAccum += dt;
+    while (f.regenAccum >= TUNING.regenEveryMs) {
+      f.regenAccum -= TUNING.regenEveryMs;
+      if (f.grip < f.gripMax && f.grip > 0) {
+        f.grip = Math.min(f.gripMax, f.grip + TUNING.regenAmount);
+        events.push('regen');
+      }
+    }
+  }
+
+  if (f.projectile) {
+    const speed = f.focus.active ? (calm ? PACING.focusSpeedCalm : PACING.focusSpeed) : 1;
+    let progress = f.projectile.progress + (dt * speed) / f.projectile.travel;
+    if (f.focus.active) progress = Math.min(progress, Math.max(f.projectile.progress, PACING.focusCap));
+    progress = Math.min(1, progress);
+    f.projectile = { ...f.projectile, progress };
+    if (progress >= 1 && !f.focus.active) events.push('land');
+  } else if (Number.isFinite(f.throwTimer)) {
+    f.throwTimer -= live;
+    if (f.throwTimer <= PACING.windupMs && !f.windupShown) {
+      f.windupShown = true;
+      events.push('windup');
+    }
+    if (f.throwTimer <= 0) {
+      f.throwTimer = Infinity; // the UI launches the comment, then nothing else is scheduled
+      events.push('throw');
+    }
+  }
+
+  if (f.roundTimeLeftMs <= 0 && !f.focus.active && !f.ended) events.push('roundOver');
+  return { fight: f, events };
+}
+
+/** Puts a comment in the air. There is never more than one. */
+export function launchComment(f, comment, travel) {
+  if (f.projectile) return f;
+  return { ...f, projectile: { comment, progress: 0, travel }, throwTimer: Infinity };
+}
+
+function afterResolve(f, calm) {
+  return { ...f, projectile: null, throwTimer: throwGap(calm), windupShown: false };
 }
 
 function previousLines(f) {
-  return f.log.filter((l) => l.kind !== 'finisher').map((l) => l.line);
+  return f.log.map((l) => l.line);
 }
 
-/** Records a combo landing. Only solid hits and parries count. */
-export function trackCombo(used, moveId, verdict) {
-  const next = new Set(used);
-  if (verdict === 'hit' || verdict === 'parry') next.add(moveId);
-  return { used: next, unlocked: MOVES.every((m) => next.has(m.id)) };
+function lowerGrip(f, dmg) {
+  const grip = Math.max(Math.min(f.grip, TUNING.gripFloor), f.grip - dmg);
+  const finisherReady = f.finisherReady || grip <= f.gripMax * TUNING.finisherAtFraction;
+  return { grip, finisherReady, justUnlocked: finisherReady && !f.finisherReady };
 }
 
-/** A typed attack while nothing is incoming. */
-export function applyAttack(f, moveId, line, now = 0) {
-  const text = sanitizeText(line);
-  const res = computeDamage(text, previousLines(f));
-  if (res.verdict === 'repeat') {
-    return { fight: { ...f, lastActivityAt: now }, result: res, justUnlocked: false };
+/** Damage for a line, including the first-use variety bonus for its move. */
+export function scoreLine(f, moveId, line) {
+  const res = computeDamage(line, previousLines(f));
+  if (res.verdict === 'hit' && !f.movesUsed.includes(moveId)) {
+    return { ...res, damage: res.damage + TUNING.varietyBonus, variety: TUNING.varietyBonus };
   }
+  return { ...res, variety: 0 };
+}
+
+/** A typed answer while nothing is incoming. Never takes GRIP below 1. */
+export function applyAttack(f, moveId, line) {
+  const text = sanitizeText(line);
+  const res = scoreLine(f, moveId, text);
+  const base = { ...exitFocus(f), regenAccum: 0 };
+  if (res.verdict === 'repeat') return { fight: base, result: res, justUnlocked: false };
   const solid = res.verdict === 'hit';
-  const combo = solid ? landed(f, moveId) : { used: f.used, finisherReady: f.finisherReady, justUnlocked: false };
+  const g = lowerGrip(f, res.damage);
   const streak = solid ? f.streak + 1 : f.streak;
-  const fight = {
-    ...f,
-    ...damageAnxiety(f, res.damage),
-    used: combo.used,
-    finisherReady: combo.finisherReady,
-    streak,
-    bestStreak: Math.max(f.bestStreak, streak),
-    lastActivityAt: now,
-    log: [...f.log, { kind: 'attack', move: moveId, line: text, damage: res.damage, verdict: res.verdict }],
+  return {
+    fight: {
+      ...base,
+      grip: g.grip,
+      finisherReady: g.finisherReady,
+      streak,
+      bestStreak: Math.max(f.bestStreak, streak),
+      movesUsed: solid && !f.movesUsed.includes(moveId) ? [...f.movesUsed, moveId] : f.movesUsed,
+      log: [...f.log, { kind: 'attack', move: moveId, line: text, damage: f.grip - g.grip, verdict: res.verdict }],
+    },
+    result: res,
+    justUnlocked: g.justUnlocked,
   };
-  return { fight, result: res, justUnlocked: combo.justUnlocked };
 }
 
 export function commentHitDamage(rng) {
-  const [a, b] = TUNING.commentHitMs;
+  const [a, b] = TUNING.commentHit;
   return rng.int(a, b);
 }
 
 /** Classifies a counter typed while a comment is incoming. */
 export function blockOutcome(res, rng) {
-  if (res.verdict === 'hit' && res.damage >= TUNING.parryAt) {
-    return { kind: 'parry', anxietyDamage: res.damage, playerDamage: 0 };
-  }
+  if (res.verdict === 'hit' && res.damage >= TUNING.parryAt) return { kind: 'parry', gripDamage: res.damage, playerDamage: 0 };
   if (res.verdict === 'hit' && res.damage >= TUNING.partialAt) {
-    return { kind: 'partial', anxietyDamage: 0, playerDamage: Math.ceil(commentHitDamage(rng) / 2) };
+    return { kind: 'partial', gripDamage: 0, playerDamage: Math.ceil(commentHitDamage(rng) / 2) };
   }
-  return { kind: 'hit', anxietyDamage: 0, playerDamage: commentHitDamage(rng) };
+  return { kind: 'hit', gripDamage: 0, playerDamage: commentHitDamage(rng) };
 }
 
 function hurtPlayer(f, dmg) {
@@ -504,28 +651,32 @@ function hurtPlayer(f, dmg) {
     streak: 0,
     down: playerHp <= 0,
     knockdowns: f.knockdowns + (knockedDown ? 1 : 0),
+    phase: playerHp <= 0 ? 'down' : f.phase,
   };
 }
 
 /** A counter typed while a comment is in the air. */
-export function applyBlock(f, moveId, line, comment, rng, now = 0) {
+export function applyBlock(f, moveId, line, rng, { calm = false } = {}) {
   const text = sanitizeText(line);
-  const res = computeDamage(text, previousLines(f));
+  const comment = f.projectile ? f.projectile.comment : { trap: '' };
+  const res = scoreLine(f, moveId, text);
   const outcome = blockOutcome(res, rng);
-  let next = { ...f, lastActivityAt: now };
+  let next = afterResolve({ ...exitFocus(f), regenAccum: 0 }, calm);
   let justUnlocked = false;
+  let gripDamage = 0;
   if (outcome.kind === 'parry') {
-    const combo = landed(f, moveId);
+    const g = lowerGrip(f, outcome.gripDamage);
+    gripDamage = f.grip - g.grip;
+    justUnlocked = g.justUnlocked;
     const streak = f.streak + 1;
-    justUnlocked = combo.justUnlocked;
     next = {
       ...next,
-      ...damageAnxiety(f, outcome.anxietyDamage),
-      used: combo.used,
-      finisherReady: combo.finisherReady,
+      grip: g.grip,
+      finisherReady: g.finisherReady,
       streak,
       bestStreak: Math.max(f.bestStreak, streak),
       parries: f.parries + 1,
+      movesUsed: f.movesUsed.includes(moveId) ? f.movesUsed : [...f.movesUsed, moveId],
     };
   } else {
     next = { ...next, ...hurtPlayer(f, outcome.playerDamage) };
@@ -533,32 +684,33 @@ export function applyBlock(f, moveId, line, comment, rng, now = 0) {
   }
   if (res.verdict !== 'repeat') {
     next.log = [...f.log, {
-      kind: 'block', move: moveId, line: text, damage: outcome.anxietyDamage, verdict: res.verdict,
+      kind: 'block', move: moveId, line: text, damage: gripDamage, verdict: res.verdict,
       outcome: outcome.kind, trap: comment.trap,
     }];
   }
-  return { fight: next, result: res, outcome, justUnlocked };
+  return { fight: next, result: res, outcome: { ...outcome, gripDamage }, justUnlocked };
 }
 
 /** A comment reached the player unanswered. */
-export function applyCommentHit(f, rng) {
+export function applyCommentHit(f, rng, { calm = false } = {}) {
   const dmg = commentHitDamage(rng);
-  return { fight: { ...f, ...hurtPlayer(f, dmg) }, damage: dmg };
+  return { fight: { ...afterResolve(f, calm), ...hurtPlayer(f, dmg) }, damage: dmg };
 }
 
-export function applyFinisher(f) {
-  if (!f.finisherReady || f.finisherUsed) return { fight: f, damage: 0 };
-  const dmg = TUNING.finisherDamage;
-  return {
-    fight: {
-      ...f,
-      ...damageAnxiety(f, dmg),
-      finisherReady: false,
-      finisherUsed: true,
-      log: [...f.log, { kind: 'finisher', move: 'finisher', line: 'FULL FLIP', damage: dmg, verdict: 'finisher' }],
-    },
-    damage: dmg,
-  };
+/**
+ * The finisher. Only a balanced thought can K.O., and only once GRIP is at or below
+ * 25%. After round 3 (timeout) it can still be written, but it doesn't K.O.
+ */
+export function applyBalancedThought(f, text) {
+  const balanced = sanitizeText(text, TUNING.lineMaxChars);
+  if (balanced.length < TUNING.balancedMinChars) return { fight: f, ok: false };
+  if (f.ended === 'timeout') return { fight: { ...f, balanced }, ok: true };
+  if (!f.finisherReady || f.ended) return { fight: f, ok: false };
+  return { fight: { ...exitFocus(f), balanced, grip: 0, ended: 'ko', phase: 'ended', projectile: null }, ok: true };
+}
+
+export function setBalancedBelief(f, n) {
+  return { ...f, balancedBelief: Math.max(0, Math.min(100, Math.round(Number(n) || 0))) };
 }
 
 /**
@@ -567,37 +719,24 @@ export function applyFinisher(f) {
  */
 // eslint-disable-next-line no-unused-vars
 export function recover(f, how) {
+  const g = lowerGrip(f, TUNING.recoverGripLoss);
   return {
     ...f,
     down: false,
+    phase: 'down',
     playerHp: TUNING.recoverPlayerHp,
-    anxietyHp: Math.max(1, f.anxietyHp - TUNING.recoverAnxietyLoss),
+    grip: g.grip,
+    finisherReady: g.finisherReady,
+    projectile: null,
   };
 }
 
-/** Idle regen: +1 HP once `regenEveryMs` has passed since the later of activity and last regen. */
-export function regenTick(f, now) {
-  const since = Math.max(f.lastActivityAt, f.lastRegenAt);
-  if (now - since < TUNING.regenEveryMs || f.anxietyHp >= f.anxietyMax || f.anxietyHp <= 0) {
-    return { fight: f, grew: false };
-  }
-  return {
-    fight: { ...f, anxietyHp: Math.min(f.anxietyMax, f.anxietyHp + TUNING.regenAmount), lastRegenAt: now },
-    grew: true,
-  };
-}
-
-/** Counts down the round clock. `roundOver` once it hits zero. */
-export function tickRound(f, dtMs) {
-  const roundTimeLeftMs = Math.max(0, f.roundTimeLeftMs - dtMs);
-  return { fight: { ...f, roundTimeLeftMs }, roundOver: roundTimeLeftMs <= 0 && !f.ended };
-}
-
-/** Moves to the next round (HP carries over) or ends the fight after the last one. */
+/** Moves to the next round (HP and GRIP carry over) or ends the fight after the last one. */
 export function endRound(f) {
   if (f.ended) return f;
-  if (f.round >= TUNING.rounds) return { ...f, ended: 'timeout' };
-  return { ...f, round: f.round + 1, roundTimeLeftMs: TUNING.roundSeconds * 1000 };
+  const base = { ...exitFocus(f), projectile: null, throwTimer: Infinity, windupShown: false };
+  if (f.round >= TUNING.rounds) return { ...base, ended: 'timeout', phase: 'ended' };
+  return { ...base, round: f.round + 1, roundTimeLeftMs: TUNING.roundSeconds * 1000, phase: 'between' };
 }
 
 export function strongestLine(f) {
@@ -617,12 +756,123 @@ export function topBlockedTraps(f, n = 2) {
   return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([trap, count]) => ({ trap, count }));
 }
 
-/** 0..1 visual size for anxiety, relative to the strongest possible start. */
-export function anxietySize(hp) {
-  return Math.max(0, Math.min(1, hp / TUNING.anxietyHpMax));
+/** 0..1 visual size for the opponent, relative to the strongest possible start. */
+export function opponentSize(grip) {
+  return Math.max(0, Math.min(1, grip / TUNING.gripMax));
 }
 
 export function formatDuration(ms) {
   const total = Math.max(0, Math.round(ms / 1000));
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
+
+// ---------- Results (pure, so the card, .md and .txt share one order) ----------
+
+/** The best action line: the strongest Action Uppercut, if one was used. */
+export function bestAction(f) {
+  return f.log
+    .filter((l) => l.move === 'uppercut' && l.verdict === 'hit')
+    .reduce((best, l) => (!best || l.damage > best.damage ? l : best), null);
+}
+
+/**
+ * Ordered result sections. Outcomes (ratings, balanced thought, feeling) always
+ * come before game stats.
+ */
+export function resultSections(d) {
+  const sections = [];
+  const ctxRows = [];
+  if (d.situation) ctxRows.push(['Situation', d.situation]);
+  ctxRows.push(['Thought', d.thought]);
+  if (d.fear) ctxRows.push(['Hot thought', d.fear]);
+  if (d.who) ctxRows.push(['Who', d.who]);
+  sections.push({ id: 'context', title: 'The situation and the thought', rows: ctxRows });
+  sections.push({
+    id: 'emotion', title: `Feeling (${d.emotions.join(', ')})`, bar: { before: d.intensityBefore, after: d.intensityAfter },
+  });
+  sections.push({ id: 'belief', title: 'Belief in the original thought', bar: { before: d.beliefBefore, after: d.beliefAfter } });
+  sections.push({
+    id: 'balanced',
+    title: 'The balanced thought',
+    text: d.balanced || 'Not written this time.',
+    rows: d.balanced && d.balancedBelief !== null ? [['Belief in it', `${d.balancedBelief}/100`]] : [],
+  });
+  sections.push({ id: 'feeling', title: 'Overall', rows: [['How I feel', d.feeling]] });
+  const stats = [
+    ['Ended', d.ending],
+    ['Fight time', formatDuration(d.fightMs)],
+    ['Parries', String(d.parries)],
+    ['Knockdowns', String(d.knockdowns)],
+    ['Best streak', String(d.bestStreak)],
+    ['Traps blocked most', d.traps.length ? d.traps.map((t) => `${t.trap} (${t.count})`).join(', ') : 'None this time'],
+  ];
+  if (d.breathCycles > 0) stats.push(['Breaths taken', String(d.breathCycles)]);
+  sections.push({ id: 'stats', title: 'The fight', rows: stats });
+  sections.push({ id: 'lines', title: 'Your counter-arguments', evidence: d.evidence, groups: d.groups });
+  return sections;
+}
+
+export function copingCard(d) {
+  return [
+    ['Hot thought', d.fear || d.thought],
+    ['Balanced thought', d.balanced || '—'],
+    ['Best counter', d.bestCounter || '—'],
+    ['One action', d.action || '—'],
+  ];
+}
+
+function textBar(v) {
+  const filled = Math.round(v / 5);
+  return '█'.repeat(filled) + '░'.repeat(20 - filled);
+}
+
+/** Markdown export, in the same order as the result card. */
+export function buildResultMarkdown(d, footer) {
+  const out = [`# Flip · Fight — ${d.date}`, ''];
+  resultSections(d).forEach((s) => {
+    out.push(`## ${s.title}`, '');
+    if (s.text) out.push(s.text, '');
+    if (s.bar) {
+      out.push(`**${s.bar.before} → ${s.bar.after}**`, '', '```',
+        `Before ${textBar(s.bar.before)} ${s.bar.before}`, `After  ${textBar(s.bar.after)} ${s.bar.after}`, '```', '');
+    }
+    if (s.rows && s.rows.length) { s.rows.forEach(([k, v]) => out.push(`- **${k}:** ${v}`)); out.push(''); }
+    if (s.id === 'lines') {
+      if (s.evidence) out.push(`### ${COPY.evidenceSection}`, '', `- ${s.evidence}`, '');
+      s.groups.forEach((g) => {
+        out.push(`### ${g.title}`, '');
+        g.lines.forEach((l) => out.push(`- ${l.text} _(${l.meta})_`));
+        out.push('');
+      });
+    }
+  });
+  out.push('## Coping card', '', `_${COPY.copingIntro}_`, '');
+  copingCard(d).forEach(([k, v]) => out.push(`- **${k}:** ${v}`));
+  out.push('', '---', '', `_${COPY.closing}_`, '', `_${footer}_`, '');
+  return out.join('\n');
+}
+
+/** Plain-text export, in the same order as the result card. */
+export function buildResultText(d, footer) {
+  const rule = (t, ch) => ch.repeat(Math.max(t.length, 4));
+  const out = ['FLIP · FIGHT', d.date, rule(d.date, '='), ''];
+  resultSections(d).forEach((s) => {
+    const h = s.title.toUpperCase();
+    out.push(h, rule(h, '-'));
+    if (s.text) out.push(s.text);
+    if (s.bar) out.push(`${s.bar.before} -> ${s.bar.after}`, `Before ${textBar(s.bar.before)} ${s.bar.before}`, `After  ${textBar(s.bar.after)} ${s.bar.after}`);
+    if (s.rows) s.rows.forEach(([k, v]) => out.push(`${k}: ${v}`));
+    if (s.id === 'lines') {
+      if (s.evidence) out.push(`${COPY.evidenceSection}:`, `  * ${s.evidence}`);
+      s.groups.forEach((g) => {
+        out.push(`${g.title}:`);
+        g.lines.forEach((l) => out.push(`  * ${l.text} (${l.meta.replace(/−/g, '-')})`));
+      });
+    }
+    out.push('');
+  });
+  out.push('COPING CARD', '-----------', COPY.copingIntro);
+  copingCard(d).forEach(([k, v]) => out.push(`${k}: ${v}`));
+  out.push('', '--', COPY.closing, footer, '');
+  return out.join('\n');
 }
